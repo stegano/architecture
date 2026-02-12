@@ -1,12 +1,12 @@
 # Component Layer
 
-The Component layer is a pure component layer that does not refer to external state values internally. It only uses injected properties or internal state information.
+The component layer is a pure component layer that does not internally reference external state values. It only uses injected properties or internal state information.
 
-## Conceptual Example
+## Conceptual Examples
 
 ### User Profile Component
 
-The User Profile Component can display UI by receiving properties from the parent module, and may also have internal state.
+The User Profile Component can display UI by receiving properties from its parent module, and it can also have internal state.
 
 ```tsx
 // Component

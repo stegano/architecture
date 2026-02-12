@@ -1,12 +1,12 @@
 # State Layer
 
-The State layer can configure modules using libraries that manage global states used in applications, such as ReactQuery, Zustand, etc. It can include business logic for data requests and responses.
+The state layer can compose modules using global state management libraries like ReactQuery, Zustand, etc., used in the app. It can include business logic for data requests and responses.
 
-## Conceptual Example
+## Conceptual Examples
 
 ### User State
 
-In the User State, it queries or updates external data from the `apis` layer and returns the result. Below is an example of implementing a query and update module using React Hooks.
+In the user state, external data is queried or updated from the APIs layer, and the results are returned. Below is an example of implementing inquiry and update modules using React Hooks.
 
 ```ts
 // State
@@ -14,32 +14,32 @@ In the User State, it queries or updates external data from the `apis` layer and
 ...
 import { fetchUser, updateUser } from "./_apis/user/user.ts";
 
-// Fetch user information
+// Fetch User Information
 export const useUserFetch = () => {
   return useQuery({
     ...
     queryFn: async () => {
-      // Business logic that verifies types or conditions can also be included here.
+      // Business logic for type or condition validation can also be included here.
       const result = await fetchUser();
       return result;
     }
   });
 }
-// Update user information
+// Update User Information
 export const useUserUpdate = () => {
   return useMutation({
     ...
     mutationFn: async (data) => {
-      // Business logic that validates data can also be included here.
+      // Business logic for data validation can also be included here.
       await updateUser(data);
     }
   });
 }
 ```
 
-### State Hook referencing a Component
+### State Hook Referencing Components
 
-This is an example of creating a dialog hook using a Dialog from a lower component layer.
+This is an example of creating a dialog hook by utilizing a Dialog from a lower component layer.
 
 ```tsx
 // State
@@ -47,7 +47,7 @@ This is an example of creating a dialog hook using a Dialog from a lower compone
 ...
 import { Dialog } from "/_components/dialog/dialog.tsx"
 
-// Fetch user information
+// Use Dialog Hook
 export const useDialog = () => {
   const [content, setContent] = useState(null);
   const [isOpen, setIsOpen] = useState(false);

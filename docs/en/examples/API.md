@@ -1,21 +1,21 @@
 # API Layer
 
-The API layer is responsible for external communication. It includes all external interfaces such as communication with servers or browser local storage, cookies, etc.
+The API layer is responsible for external communication. It includes all external interfaces such as communication with the server or browser's local storage and cookies.
 
-## Conceptual Example
+## Conceptual Examples
 
 ### User API
 
-In the User API, the `apis` layer queries data through the server and returns the response.
+The User API retrieves data from the server through the apis layer and returns the response.
 
 ```ts
 // API
 // File Path: _pages/user/_apis/user/user.tsx
 ...
-// Fetch user information
+// Fetch User Information
 export const fetchUser = async (...) => {
   try {
-    // Query data from external server via axios
+    // Fetch data from external server via axios
     const result = await axios.get(...);
     return result;
   } catch(error) {
@@ -32,16 +32,16 @@ export const fetchUser = async (...) => {
 
 ### Fetch User Settings from LocalStorage
 
-This is an example of storing and using user's state in browser local storage.
+This is an example of storing and using user state in the browser's local storage.
 
 ```ts
 // API
 // File Path: _pages/user/_apis/user/user.ts
 ...
-// Fetch user settings
+// Fetch User Settings
 export const fetchUserSetting = async (...) => {
   try {
-    // Query data via browser local storage
+    // Fetch data from browser local storage
     const settings = window.localStorage.getItem("settings") || {};
     return settings ? JSON.parse(settings) : { theme: "light" };
   } catch(error) {

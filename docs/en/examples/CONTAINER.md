@@ -1,12 +1,12 @@
 # Container Layer
 
-The container layer can compose screens using components and handle data states. It can fetch necessary data at the desired time and make decisions based on the data processing status.
+The container is a layer that can compose screens using components and handle data states. It can fetch necessary data at the desired time and make decisions based on the data processing status.
 
-## Conceptual Example
+## Conceptual Examples
 
 ### User Container
 
-The User Container can fetch data using hooks that can query data from the `states` layer and update the UI based on the data status.
+The User Container can fetch data using a hook that can query data from the states layer and update the UI according to the data status.
 
 ```tsx
 // Container
@@ -16,7 +16,7 @@ import { Profile } from "./_components/profile/profile.tsx";
 import { useUserFetch } from "./_states/user/user.ts";
 
 export const User: React.FC = ({ onSignInClick }) => {
-  // When this container is rendered, data is fetched using a hook created by ReactQuery's useQuery.
+  // When this container is rendered, it fetches data using a hook created with ReactQuery's useQuery.
   const { data, isFetching, isError, refetch } = useUserFetch();
   if(isFetching) {
     return (
@@ -30,6 +30,6 @@ export const User: React.FC = ({ onSignInClick }) => {
   }
   return !!data
     ? <Profile data={data} />
-    : <button onClick={onSignInClick}>Sign In</button>;
+    : <button onClick={onSignInClick}>Login</button>;
 }
 ```
