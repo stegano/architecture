@@ -1,6 +1,7 @@
 {
-  "errorCount": 4,
+  "errorCount": 5,
   "rules": {
-    "FLA006": 4
+    "FLA006": 4,
+    "FLA002": 1
   }
 }

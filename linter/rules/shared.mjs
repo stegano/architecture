@@ -1,4 +1,5 @@
 import path from "node:path";
+import { createRequire } from "node:module";
 import {
   getLayerRank,
   hasLayerSegment,
@@ -70,34 +71,223 @@ export const getSuffixFromFileName = (fileName) => {
   return parts.at(-1);
 };
 
-const IMPORT_PATTERNS = [
-  /\bimport\s+(?:type\s+)?[\s\S]*?\sfrom\s*(['"])([^'"\n]+)\1/gm,
-  /\bexport\s+[\s\S]*?\sfrom\s*(['"])([^'"\n]+)\1/gm,
-  /\bimport\s*\(\s*(['"])([^'"\n]+)\1\s*\)/gm,
-  /\brequire\s*\(\s*(['"])([^'"\n]+)\1\s*\)/gm,
-];
+let tsModule;
+let tsLoadAttempted = false;
 
-export const parseImportSpecifiers = (content) => {
-  const code = maskComments(content);
+const getTypeScriptModule = () => {
+  if (tsLoadAttempted) {
+    return tsModule;
+  }
+
+  tsLoadAttempted = true;
+  try {
+    const require = createRequire(import.meta.url);
+    tsModule = require("typescript");
+  } catch {
+    tsModule = null;
+  }
+
+  return tsModule;
+};
+
+const getScriptKind = ({ filename, ts }) => {
+  const ext = path.extname(filename);
+  return ext === ".tsx" ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+};
+
+const parseImportSpecifiersFallback = (content) => {
   const imports = [];
+  const isIdentifierChar = (value) => /[A-Za-z0-9_$]/.test(value);
 
-  for (const pattern of IMPORT_PATTERNS) {
-    for (const match of code.matchAll(pattern)) {
-      const full = match[0];
-      const quote = match[1];
-      const specifier = match[2];
-      const quoted = `${quote}${specifier}${quote}`;
-      const localIndex = full.indexOf(quoted);
-      const index =
-        typeof match.index === "number"
-          ? match.index + Math.max(localIndex + 1, 0)
-          : 0;
+  const isWordStart = (index, keyword) => {
+    if (index > 0 && isIdentifierChar(content[index - 1])) {
+      return false;
+    }
+    const end = index + keyword.length;
+    if (end < content.length && isIdentifierChar(content[end])) {
+      return false;
+    }
+    return true;
+  };
 
-      imports.push({ specifier, index });
+  const isEscaped = (index) => {
+    let slashes = 0;
+    for (let cursor = index - 1; cursor >= 0 && content[cursor] === "\\"; cursor -= 1) {
+      slashes += 1;
+    }
+    return slashes % 2 === 1;
+  };
+
+  const skipString = (start) => {
+    const quote = content[start];
+    let i = start + 1;
+    if (quote === "`") {
+      while (i < content.length) {
+        const ch = content[i];
+        if (ch === "`" && !isEscaped(i)) {
+          return i + 1;
+        }
+        if (ch === "\\" && i + 1 < content.length) {
+          i += 2;
+          continue;
+        }
+        i += 1;
+      }
+      return i;
+    }
+
+    while (i < content.length) {
+      const ch = content[i];
+      if (ch === quote && !isEscaped(i)) {
+        return i + 1;
+      }
+      if (ch === "\\" && i + 1 < content.length) {
+        i += 2;
+        continue;
+      }
+      i += 1;
+    }
+    return i;
+  };
+
+  for (let i = 0; i < content.length; i += 1) {
+    const ch = content[i];
+
+    if (ch === "/" && content[i + 1] === "/") {
+      i += 2;
+      while (i < content.length && content[i] !== "\n") {
+        i += 1;
+      }
+      continue;
+    }
+
+    if (ch === "/" && content[i + 1] === "*") {
+      i += 2;
+      while (i < content.length - 1) {
+        if (content[i] === "*" && content[i + 1] === "/") {
+          i += 1;
+          break;
+        }
+        i += 1;
+      }
+      continue;
+    }
+
+    if (ch === "'" || ch === '"' || ch === "`") {
+      i = skipString(i) - 1;
+      continue;
+    }
+
+    if (ch === "i" && isWordStart(i, "import")) {
+      const rem = content.slice(i);
+      let match = rem.match(/^import(?:\s+type)?[\s\S]*?\sfrom\s*(['"])([^'"\n]+)\1/);
+      if (match) {
+        imports.push({ specifier: match[2], index: i + match.index + 1 });
+        i += match[0].length - 1;
+        continue;
+      }
+
+      match = rem.match(/^import\s*\(\s*(['"])([^'"\n]+)\1\s*\)/);
+      if (match) {
+        imports.push({ specifier: match[2], index: i + match.index + 1 });
+        i += match[0].length - 1;
+        continue;
+      }
+      continue;
+    }
+
+    if (ch === "e" && isWordStart(i, "export")) {
+      const rem = content.slice(i);
+      const match = rem.match(/^export[\s\S]*?\sfrom\s*(['"])([^'"\n]+)\1/);
+      if (match) {
+        imports.push({ specifier: match[2], index: i + match.index + 1 });
+        i += match[0].length - 1;
+      }
+      continue;
+    }
+
+    if (ch === "r" && isWordStart(i, "require")) {
+      const rem = content.slice(i);
+      const match = rem.match(/^require\s*\(\s*(['"])([^'"\n]+)\1\s*\)/);
+      if (match) {
+        imports.push({ specifier: match[2], index: i + match.index + 1 });
+        i += match[0].length - 1;
+      }
     }
   }
 
   return imports;
+};
+
+const collectImportNodes = ({ node, ts, sourceFile }) => {
+  const imports = [];
+
+  const scan = (current) => {
+    if (!current) {
+      return;
+    }
+
+    if (current.kind === ts.SyntaxKind.ImportDeclaration) {
+      const moduleSpecifier = current.moduleSpecifier;
+      if (ts.isStringLiteral(moduleSpecifier)) {
+        imports.push({
+          specifier: moduleSpecifier.text,
+          index: moduleSpecifier.getStart(sourceFile, true),
+        });
+      }
+    } else if (current.kind === ts.SyntaxKind.ExportDeclaration) {
+      const moduleSpecifier = current.moduleSpecifier;
+      if (moduleSpecifier && ts.isStringLiteral(moduleSpecifier)) {
+        imports.push({
+          specifier: moduleSpecifier.text,
+          index: moduleSpecifier.getStart(sourceFile, true),
+        });
+      }
+    } else if (current.kind === ts.SyntaxKind.ImportExpression) {
+      const moduleSpecifier = current.argument;
+      if (moduleSpecifier && ts.isStringLiteral(moduleSpecifier)) {
+        imports.push({
+          specifier: moduleSpecifier.text,
+          index: moduleSpecifier.getStart(sourceFile, true),
+        });
+      }
+    } else if (
+      current.kind === ts.SyntaxKind.CallExpression &&
+      current.expression &&
+      current.expression.kind === ts.SyntaxKind.Identifier &&
+      current.expression.text === "require" &&
+      current.arguments.length > 0 &&
+      current.arguments[0] &&
+      ts.isStringLiteral(current.arguments[0])
+    ) {
+      imports.push({
+        specifier: current.arguments[0].text,
+        index: current.arguments[0].getStart(sourceFile, true),
+      });
+    }
+
+    ts.forEachChild(current, scan);
+  };
+
+  scan(node);
+  return imports;
+};
+
+export const parseImportSpecifiers = ({ content, filename }) => {
+  const ts = getTypeScriptModule();
+  if (!ts) {
+    return parseImportSpecifiersFallback(content);
+  }
+
+  const sourceFile = ts.createSourceFile(
+    filename || "tmp.ts",
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    getScriptKind({ filename: filename || "tmp.ts", ts }),
+  );
+
+  return collectImportNodes({ node: sourceFile, ts, sourceFile });
 };
 
 const getInnermostLayerIndex = (segments, layerDirs) => {
@@ -166,7 +356,7 @@ export const collectLayerImportEdges = ({
   }
 
   const edges = [];
-  for (const dependency of parseImportSpecifiers(content)) {
+  for (const dependency of parseImportSpecifiers({ content, filename: fileAbs })) {
     if (isExternalSpecifier(dependency.specifier, config.pathAliases)) {
       continue;
     }

@@ -4,7 +4,12 @@
   "allowedExtensions": [".ts", ".tsx"],
   "defaultTsSuffixes": ["type", "schema", "stories", "test"],
   "extraTsSuffixes": [],
-  "interfaceAllowedGlobs": ["**/*.type.ts"],
+  "interfaceAllowedGlobs": [
+    "**/*.type.ts",
+    "**/*.schema.ts",
+    "**/*.stories.ts",
+    "**/*.test.ts"
+  ],
   "pathAliases": {},
   "nestedLayer": {
     "enabled": true

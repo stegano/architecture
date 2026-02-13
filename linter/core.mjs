@@ -35,16 +35,89 @@ const ensureArray = (value, fallback) => (Array.isArray(value) ? value : fallbac
 const ensureObject = (value, fallback) =>
   value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
 
+const readJsonFile = (filePath) => {
+  try {
+    if (!fs.existsSync(filePath)) {
+      return null;
+    }
+    const raw = fs.readFileSync(filePath, "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
+
+const extractPathAliasesFromTsConfigFile = (tsConfigPath) => {
+  const parsed = readJsonFile(tsConfigPath);
+  if (!parsed || typeof parsed !== "object" || !parsed.compilerOptions) {
+    return {};
+  }
+
+  const compilerOptions = parsed.compilerOptions;
+  if (!compilerOptions.paths || typeof compilerOptions.paths !== "object") {
+    return {};
+  }
+
+  const baseDir = path.dirname(tsConfigPath);
+  const baseUrl = compilerOptions.baseUrl
+    ? path.resolve(baseDir, compilerOptions.baseUrl)
+    : baseDir;
+
+  const aliases = {};
+  for (const [aliasKey, aliasTargets] of Object.entries(compilerOptions.paths)) {
+    if (!Array.isArray(aliasTargets) || aliasTargets.length < 1) {
+      continue;
+    }
+
+    const rawTarget = aliasTargets[0];
+    if (typeof rawTarget !== "string" || rawTarget.length === 0) {
+      continue;
+    }
+
+    const trimmedTarget = rawTarget.endsWith("/*")
+      ? rawTarget.slice(0, -2)
+      : rawTarget;
+
+    aliases[aliasKey] = path.isAbsolute(trimmedTarget)
+      ? trimmedTarget
+      : path.resolve(baseUrl, trimmedTarget);
+  }
+
+  return aliases;
+};
+
+const loadPathAliasesFromProjectConfig = (rootDir) => {
+  const candidatePaths = [
+    path.resolve(rootDir, "tsconfig.json"),
+    path.resolve(rootDir, "jsconfig.json"),
+  ];
+
+  const aliases = {};
+  for (const candidate of candidatePaths) {
+    const found = extractPathAliasesFromTsConfigFile(candidate);
+    Object.assign(aliases, found);
+  }
+
+  return aliases;
+};
+
 export const loadConfig = ({ rootDir, configPath }) => {
   const resolvedPath = configPath
     ? path.resolve(rootDir, configPath)
     : path.resolve(rootDir, "linter/fla-lint.config.json");
-
-  const baseConfig = structuredClone(DEFAULT_CONFIG);
+  const discoveredAliases = loadPathAliasesFromProjectConfig(rootDir);
 
   if (!fs.existsSync(resolvedPath)) {
+    const config = {
+      ...DEFAULT_CONFIG,
+      pathAliases: {
+        ...discoveredAliases,
+        ...DEFAULT_CONFIG.pathAliases,
+      },
+    };
+
     return {
-      config: baseConfig,
+      config,
       resolvedPath,
       loaded: false,
     };
@@ -54,55 +127,55 @@ export const loadConfig = ({ rootDir, configPath }) => {
   const parsed = JSON.parse(raw);
 
   const nestedLayer = {
-    ...baseConfig.nestedLayer,
+    ...DEFAULT_CONFIG.nestedLayer,
     ...ensureObject(parsed.nestedLayer, {}),
   };
 
   const singleUseLayerModule = {
-    ...baseConfig.singleUseLayerModule,
+    ...DEFAULT_CONFIG.singleUseLayerModule,
     ...ensureObject(parsed.singleUseLayerModule, {}),
     layers: ensureArray(
       parsed.singleUseLayerModule?.layers,
-      baseConfig.singleUseLayerModule.layers,
+      DEFAULT_CONFIG.singleUseLayerModule.layers,
     ),
   };
 
   const namingConvention = {
-    ...baseConfig.namingConvention,
+    ...DEFAULT_CONFIG.namingConvention,
     ...ensureObject(parsed.namingConvention, {}),
   };
 
   const layerDirectoryNaming = {
-    ...baseConfig.layerDirectoryNaming,
+    ...DEFAULT_CONFIG.layerDirectoryNaming,
     ...ensureObject(parsed.layerDirectoryNaming, {}),
   };
 
   const moduleGrouping = {
-    ...baseConfig.moduleGrouping,
+    ...DEFAULT_CONFIG.moduleGrouping,
     ...ensureObject(parsed.moduleGrouping, {}),
   };
 
   const config = {
-    ...baseConfig,
+    ...DEFAULT_CONFIG,
     ...parsed,
     nestedLayer,
     singleUseLayerModule,
     namingConvention,
     layerDirectoryNaming,
     moduleGrouping,
-    layerDirs: ensureArray(parsed.layerDirs, baseConfig.layerDirs),
-    ignoreDirs: ensureArray(parsed.ignoreDirs, baseConfig.ignoreDirs),
-    allowedExtensions: ensureArray(parsed.allowedExtensions, baseConfig.allowedExtensions),
-    defaultTsSuffixes: ensureArray(parsed.defaultTsSuffixes, baseConfig.defaultTsSuffixes),
-    extraTsSuffixes: ensureArray(parsed.extraTsSuffixes, baseConfig.extraTsSuffixes),
+    layerDirs: ensureArray(parsed.layerDirs, DEFAULT_CONFIG.layerDirs),
+    ignoreDirs: ensureArray(parsed.ignoreDirs, DEFAULT_CONFIG.ignoreDirs),
+    allowedExtensions: ensureArray(parsed.allowedExtensions, DEFAULT_CONFIG.allowedExtensions),
+    defaultTsSuffixes: ensureArray(parsed.defaultTsSuffixes, DEFAULT_CONFIG.defaultTsSuffixes),
+    extraTsSuffixes: ensureArray(parsed.extraTsSuffixes, DEFAULT_CONFIG.extraTsSuffixes),
     interfaceAllowedGlobs: ensureArray(
       parsed.interfaceAllowedGlobs,
-      baseConfig.interfaceAllowedGlobs,
+      DEFAULT_CONFIG.interfaceAllowedGlobs,
     ),
-    pathAliases:
-      parsed.pathAliases && typeof parsed.pathAliases === "object"
-        ? parsed.pathAliases
-        : baseConfig.pathAliases,
+    pathAliases: {
+      ...discoveredAliases,
+      ...ensureObject(parsed.pathAliases, DEFAULT_CONFIG.pathAliases),
+    },
   };
 
   return {
@@ -279,8 +352,8 @@ export const runLinter = ({
   const trailer = `Scanned ${summary.scannedFiles} files. Found ${summary.errorCount} errors.`;
   const scannedPreview = summary.scannedFileNamesTop10.length
     ? `\nTop 10 scanned files:\n${summary.scannedFileNamesTop10
-      .map((filePath) => `  - ${filePath}`)
-      .join("\n")}`
+        .map((filePath) => `  - ${filePath}`)
+        .join("\n")}`
     : "";
 
   return {

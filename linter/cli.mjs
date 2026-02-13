@@ -1,6 +1,49 @@
 #!/usr/bin/env node
 import path from "node:path";
+import fs from "node:fs";
 import { runLinter } from "./core.mjs";
+
+const printHelp = () => {
+  process.stdout.write(`Usage:
+  node linter/cli.mjs [rootDir] [--config <path>] [--format json|text] [--root <dir>] [--fail-on-warn]
+
+Options:
+  --config <path>     Use config file (relative to rootDir)
+  --format json|text  Output format (default: json)
+  --root <dir>        Alias for rootDir
+  --fail-on-warn      Exit with code 1 when errors found
+  --help              Print this help
+`);
+};
+
+const printHintRootCandidates = (cwd) => {
+  const candidates = [
+    "src",
+    "linter/tests/fixtures/fail-basic",
+    ".",
+    "linter/tests",
+  ];
+
+  const existing = candidates
+    .filter((candidate) => {
+      const p = path.resolve(cwd, candidate);
+      try {
+        return fs.statSync(p).isDirectory();
+      } catch {
+        return false;
+      }
+    })
+    .map((candidate) => path.resolve(cwd, candidate));
+
+  if (existing.length === 0) {
+    return;
+  }
+
+  process.stderr.write("Hint: you can try one of these existing directories:\n");
+  for (const p of existing) {
+    process.stderr.write(`  - ${p}\n`);
+  }
+};
 
 const parseArgs = (argv) => {
   const options = {
@@ -40,6 +83,11 @@ const parseArgs = (argv) => {
       continue;
     }
 
+    if (token === "--help" || token === "-h") {
+      printHelp();
+      process.exit(0);
+    }
+
     if (!token.startsWith("-")) {
       options.rootDir = path.resolve(process.cwd(), token);
     }
@@ -50,6 +98,19 @@ const parseArgs = (argv) => {
 
 const main = () => {
   const options = parseArgs(process.argv.slice(2));
+  try {
+    const rootStat = fs.statSync(options.rootDir);
+    if (!rootStat.isDirectory()) {
+      process.stderr.write(`Error: root path is not a directory: ${options.rootDir}\n`);
+      printHintRootCandidates(process.cwd());
+      process.exit(1);
+    }
+  } catch {
+    process.stderr.write(`Error: root path is not accessible: ${options.rootDir}\n`);
+    printHintRootCandidates(process.cwd());
+    process.exit(1);
+  }
+
   const result = runLinter({
     rootDir: options.rootDir,
     configPath: options.configPath,

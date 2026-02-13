@@ -40,21 +40,50 @@ export const getLayerRank = (filePath, layerDirs, layerRanks = DEFAULT_LAYER_RAN
     : null;
 };
 
+const normalizeAliasTarget = (value, rootDir) => {
+  if (!value || typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.endsWith("/*") ? value.slice(0, -2) : value;
+  return path.isAbsolute(normalized) ? normalized : path.resolve(rootDir, normalized);
+};
+
+const getAliasPrefix = (aliasKey) =>
+  aliasKey.endsWith("/*") ? aliasKey.slice(0, -2) : aliasKey;
+
+const isAliasMatch = (specifier, aliasKey) => {
+  const prefix = getAliasPrefix(aliasKey);
+  if (aliasKey.endsWith("/*")) {
+    return specifier === prefix || specifier.startsWith(`${prefix}/`);
+  }
+  return specifier === prefix || specifier.startsWith(prefix);
+};
+
 const applyAlias = (specifier, rootDir, aliases) => {
   const keys = Object.keys(aliases || {}).sort((a, b) => b.length - a.length);
-  for (const key of keys) {
-    if (specifier === key || specifier.startsWith(key)) {
-      const targetBase = aliases[key];
-      if (typeof targetBase !== "string" || targetBase.length === 0) {
-        return null;
-      }
-      const suffix = specifier.slice(key.length);
-      const base = path.isAbsolute(targetBase)
-        ? targetBase
-        : path.resolve(rootDir, targetBase);
+
+  for (const aliasKey of keys) {
+    const base = normalizeAliasTarget(aliases[aliasKey], rootDir);
+    if (!base) {
+      continue;
+    }
+
+    if (!isAliasMatch(specifier, aliasKey)) {
+      continue;
+    }
+
+    const prefix = getAliasPrefix(aliasKey);
+
+    if (aliasKey.endsWith("/*")) {
+      const suffix = specifier.slice(prefix.length).replace(/^\//, "");
       return path.resolve(base, suffix);
     }
+
+    const suffix = specifier === prefix ? "" : specifier.slice(aliasKey.length).replace(/^\//, "");
+    return path.resolve(base, suffix);
   }
+
   return null;
 };
 
@@ -63,9 +92,7 @@ export const isExternalSpecifier = (specifier, aliases = {}) => {
     return false;
   }
 
-  return !Object.keys(aliases).some(
-    (key) => specifier === key || specifier.startsWith(key),
-  );
+  return !Object.keys(aliases).some((key) => isAliasMatch(specifier, key));
 };
 
 export const resolveSpecifier = ({ specifier, sourceFileAbs, rootDir, aliases }) => {
@@ -121,7 +148,6 @@ export const globToRegExp = (glob) => {
 
     out += ch;
   }
-
   out += "$";
   return new RegExp(out);
 };
