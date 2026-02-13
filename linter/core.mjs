@@ -15,9 +15,9 @@ export const DEFAULT_CONFIG = {
   nestedLayer: {
     enabled: true,
   },
-  singleUseGlobal: {
+  singleUseLayerModule: {
     enabled: true,
-    layers: ["_states", "_components"],
+    layers: ["_pages", "_containers", "_states", "_components", "_apis", "_utils"],
     minUpperModuleReferences: 2,
   },
   namingConvention: {
@@ -58,12 +58,12 @@ export const loadConfig = ({ rootDir, configPath }) => {
     ...ensureObject(parsed.nestedLayer, {}),
   };
 
-  const singleUseGlobal = {
-    ...baseConfig.singleUseGlobal,
-    ...ensureObject(parsed.singleUseGlobal, {}),
+  const singleUseLayerModule = {
+    ...baseConfig.singleUseLayerModule,
+    ...ensureObject(parsed.singleUseLayerModule, {}),
     layers: ensureArray(
-      parsed.singleUseGlobal?.layers,
-      baseConfig.singleUseGlobal.layers,
+      parsed.singleUseLayerModule?.layers,
+      baseConfig.singleUseLayerModule.layers,
     ),
   };
 
@@ -86,7 +86,7 @@ export const loadConfig = ({ rootDir, configPath }) => {
     ...baseConfig,
     ...parsed,
     nestedLayer,
-    singleUseGlobal,
+    singleUseLayerModule,
     namingConvention,
     layerDirectoryNaming,
     moduleGrouping,
@@ -146,10 +146,43 @@ const walkEntries = ({ rootDir, ignoreDirs }) => {
 };
 
 const formatText = ({ violations, rootDir }) => {
-  const lines = violations.map((item) => {
+  const ruleCounts = violations.reduce((acc, item) => {
+    acc[item.ruleId] = (acc[item.ruleId] || 0) + 1;
+    return acc;
+  }, {});
+
+  const fileMap = new Map();
+  for (const item of violations) {
     const rel = toPosixPath(path.relative(rootDir, path.resolve(rootDir, item.filePath)));
-    return `${rel}:${item.line}:${item.column} [${item.ruleId}] ${item.message}`;
-  });
+    const list = fileMap.get(rel) || [];
+    list.push(item);
+    fileMap.set(rel, list);
+  }
+
+  const lines = [`Found ${violations.length} lint error(s).`];
+
+  const filePaths = [...fileMap.keys()].sort();
+  for (const file of filePaths) {
+    lines.push(`\n${file}`);
+    const entries = (fileMap.get(file) || []).sort((a, b) => {
+      if (a.line !== b.line) return a.line - b.line;
+      if (a.column !== b.column) return a.column - b.column;
+      return a.ruleId.localeCompare(b.ruleId);
+    });
+
+    for (const item of entries) {
+      lines.push(
+        `  line ${item.line}:${item.column} [${item.ruleId}] ${item.message}`,
+      );
+    }
+  }
+
+  const summaryLines = Object.keys(ruleCounts)
+    .sort()
+    .map((ruleId) => `${ruleId}: ${ruleCounts[ruleId]}`);
+
+  lines.push("\nRule summary:");
+  lines.push(...summaryLines.map((line) => `  ${line}`));
 
   return lines.join("\n");
 };
@@ -169,6 +202,9 @@ export const runLinter = ({
   const candidateFiles = files.filter((fileAbs) =>
     hasLayerSegment(path.relative(rootDir, fileAbs), config.layerDirs),
   );
+  const scannedFileNamesTop10 = candidateFiles
+    .slice(0, 10)
+    .map((fileAbs) => toPosixPath(path.relative(rootDir, fileAbs)));
 
   const layerDirectories = dirs.filter((dirAbs) =>
     config.layerDirs.includes(path.basename(dirAbs)),
@@ -223,6 +259,7 @@ export const runLinter = ({
 
   const summary = {
     scannedFiles: candidateFiles.length,
+    scannedFileNamesTop10,
     errorCount: violations.length,
     ruleCounts,
     configPath: toPosixPath(path.relative(rootDir, resolvedPath)),
@@ -240,10 +277,15 @@ export const runLinter = ({
 
   const body = violations.length > 0 ? `${formatText({ violations, rootDir })}\n` : "";
   const trailer = `Scanned ${summary.scannedFiles} files. Found ${summary.errorCount} errors.`;
+  const scannedPreview = summary.scannedFileNamesTop10.length
+    ? `\nTop 10 scanned files:\n${summary.scannedFileNamesTop10
+      .map((filePath) => `  - ${filePath}`)
+      .join("\n")}`
+    : "";
 
   return {
     exitCode: violations.length > 0 ? 1 : 0,
-    output: `${body}${trailer}`,
+    output: `${body}${trailer}${scannedPreview}`,
     summary,
     violations,
   };

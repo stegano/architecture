@@ -1,10 +1,12 @@
 #!/usr/bin/env node
+import path from "node:path";
 import { runLinter } from "./core.mjs";
 
 const parseArgs = (argv) => {
   const options = {
+    rootDir: process.cwd(),
     configPath: undefined,
-    format: "text",
+    format: "json",
     failOnWarn: false,
   };
 
@@ -14,6 +16,15 @@ const parseArgs = (argv) => {
     if (token === "--config") {
       options.configPath = argv[i + 1];
       i += 1;
+      continue;
+    }
+
+    if (token === "--root") {
+      const value = argv[i + 1];
+      if (typeof value === "string") {
+        options.rootDir = path.resolve(process.cwd(), value);
+        i += 1;
+      }
       continue;
     }
 
@@ -28,6 +39,10 @@ const parseArgs = (argv) => {
       options.failOnWarn = true;
       continue;
     }
+
+    if (!token.startsWith("-")) {
+      options.rootDir = path.resolve(process.cwd(), token);
+    }
   }
 
   return options;
@@ -36,7 +51,7 @@ const parseArgs = (argv) => {
 const main = () => {
   const options = parseArgs(process.argv.slice(2));
   const result = runLinter({
-    rootDir: process.cwd(),
+    rootDir: options.rootDir,
     configPath: options.configPath,
     format: options.format,
   });

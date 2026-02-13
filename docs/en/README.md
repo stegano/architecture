@@ -58,10 +58,10 @@ Layers can have a nested layer structure, where a layer can contain its own nest
     - This is to prevent issues where some systems are not case-sensitive and to ensure consistency.
 2.  Layer directories should be written using an underscore (\_) prefix.
     - A prefix is used to distinguish it from general modules.
-3.  Separating code within a file by function, such as \*.stories.ts, \*.schema.ts, \*.type.ts, can clarify the role of the module and reduce complexity.
+3.  Separating code within a file by function, such as \*.stories.ts, \*.schema.ts, \*.type.ts, \*.test.ts, can clarify the role of the module and reduce complexity.
 
 ## Code Writing Principles
 
 1.  It is better to repeat code several times than to prematurely abstract it. Only when code is repeated several times should it be moved down to a lower layer and separated as common code. Otherwise, a module with an all-purpose interface will be created, or an increasing number of unmanaged common modules with similar functions will emerge.
 2.  Do not unnecessarily break layers into too small pieces. It is better to gradually separate them into lower layers according to the need for management, such as module independence and code complexity.
-3.  If a nested module in a specific layer is used in two or more upper layer modules, consider moving it to the top-level (global) layer module.
+3.  If a nested module in a specific layer is used in two or more upper layer modules, consider moving it to an upper layer module.

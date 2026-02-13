@@ -9,9 +9,9 @@
   "nestedLayer": {
     "enabled": true
   },
-  "singleUseGlobal": {
+  "singleUseLayerModule": {
     "enabled": true,
-    "layers": ["_states", "_components"],
+    "layers": ["_pages", "_containers", "_states", "_components", "_apis", "_utils"],
     "minUpperModuleReferences": 2
   },
   "namingConvention": {

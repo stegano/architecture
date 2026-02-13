@@ -6,12 +6,15 @@ Custom linter for Fractal Layered Architecture (FLA) rules.
 
 ```bash
 node linter/cli.mjs
+node linter/cli.mjs target/src
+node linter/cli.mjs <project-root>
 ```
 
 ## Options
 
+- `<project-root>`: optional positional root path for linted project (defaults to current working directory).
 - `--config <path>`: Use a custom config file.
-- `--format text|json`: Output format.
+- `--format text|json`: Output format (default: `json`).
 - `--fail-on-warn`: Reserved flag for CI compatibility (same behavior as error-only mode).
 
 ## Documentation principles covered
@@ -23,7 +26,7 @@ node linter/cli.mjs
 - Avoid barrel files (`index.*`) in layer scope.
 - Nested layer placement under module directory.
 - Module grouping consistency per layer (directory-based or file-based).
-- Detect global modules that are referenced by only one upper module.
+- Detect layer modules that are referenced by fewer upper modules than the configured threshold.
 
 ## Rules
 
@@ -46,8 +49,15 @@ node linter/cli.mjs
   - Forbids direct layer-to-layer nesting (`.../_pages/_components/...`).
   - Nested layer directories must be under a module directory first.
 
-- `FLA006 single-use-global-module`
-  - Detects global modules referenced by fewer upper modules than threshold.
+- `FLA006 single-use-layer-module`
+  - Detects nested layer modules that are referenced by fewer upper scopes than the configured threshold.
+  - Upper-layer consumers can be any higher layer modules (`_pages`, `_containers`, `_states`, `_components`, `_apis`), and they are grouped by scope.
+  - Reference count is measured by distinct consumer scopes (container scope first, page scope fallback), not by raw import count.
+  - Multiple imports from modules inside the same container are treated as one scope.
+  - If a module is already nested under its only consumer scope, it is not reported.
+  - If a layer module is used by fewer than `minUpperModuleReferences`, it suggests keeping it closer to its only upper scope (deeper nesting).
+  - If a layer module is used by `minUpperModuleReferences` or more upper scopes, it is treated as sufficiently reused and is not reported.
+  - Applies recursively through nested `_pages` feature trees (e.g. `_pages/<feature>/_states/...` and `_pages/<feature>/_components/...`).
 
 - `FLA007 kebab-case-naming`
   - Enforces kebab-case naming for files and directories in layer scope.
@@ -74,9 +84,9 @@ Default file: `linter/fla-lint.config.json`
   "interfaceAllowedGlobs": ["**/*.type.ts"],
   "pathAliases": {},
   "nestedLayer": { "enabled": true },
-  "singleUseGlobal": {
+  "singleUseLayerModule": {
     "enabled": true,
-    "layers": ["_states", "_components"],
+    "layers": ["_pages", "_containers", "_states", "_components", "_apis", "_utils"],
     "minUpperModuleReferences": 2
   },
   "namingConvention": { "enabled": true },

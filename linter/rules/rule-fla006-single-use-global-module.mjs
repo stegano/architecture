@@ -3,13 +3,111 @@ import {
   createViolation,
   getModuleInfo,
 } from "./shared.mjs";
+import { splitSegments } from "../path-resolver.mjs";
+
+const toModuleName = (segment) => {
+  if (!segment) {
+    return null;
+  }
+
+  if (!segment.includes(".")) {
+    return segment;
+  }
+
+  return segment.split(".")[0] || null;
+};
+
+const getScopedModuleKey = ({ info, layerDirs }) => {
+  if (!info?.relativePath || !info?.layer) {
+    return null;
+  }
+
+  const segments = splitSegments(info.relativePath);
+  let layerIndex = -1;
+
+  for (let i = segments.length - 1; i >= 0; i -= 1) {
+    if (segments[i] === info.layer) {
+      layerIndex = i;
+      break;
+    }
+  }
+
+  if (layerIndex < 0 || !layerDirs.includes(segments[layerIndex])) {
+    return null;
+  }
+
+  const moduleName = toModuleName(segments[layerIndex + 1]);
+  if (!moduleName) {
+    return null;
+  }
+
+  return `${segments.slice(0, layerIndex + 1).join("/")}/${moduleName}`;
+};
+
+const getNearestScopeByLayer = ({ relativePath, layerName }) => {
+  if (!relativePath) {
+    return null;
+  }
+
+  const segments = splitSegments(relativePath);
+
+  for (let i = segments.length - 1; i >= 0; i -= 1) {
+    if (segments[i] !== layerName) {
+      continue;
+    }
+
+    const moduleName = toModuleName(segments[i + 1]);
+    if (!moduleName) {
+      continue;
+    }
+
+    return `${segments.slice(0, i + 1).join("/")}/${moduleName}`;
+  }
+
+  return null;
+};
+
+const getConsumerScopeKey = ({ source, layerDirs }) => {
+  const containerScope = getNearestScopeByLayer({
+    relativePath: source?.relativePath,
+    layerName: "_containers",
+  });
+
+  if (containerScope) {
+    return containerScope;
+  }
+
+  const pageScope = getNearestScopeByLayer({
+    relativePath: source?.relativePath,
+    layerName: "_pages",
+  });
+
+  if (pageScope) {
+    return pageScope;
+  }
+
+  return getScopedModuleKey({ info: source, layerDirs });
+};
+
+const hasScopedLayer = ({ scopeKey, layer }) =>
+  Boolean(
+    scopeKey &&
+      (scopeKey.startsWith(`${layer}/`) || scopeKey.includes(`/${layer}/`)),
+  );
+
+const isNestedInScope = ({ moduleKey, scopeKey }) =>
+  Boolean(
+    moduleKey &&
+      scopeKey &&
+      (moduleKey === scopeKey || moduleKey.startsWith(`${scopeKey}/`)),
+  );
 
 export const RULE_FLA006 = {
   id: "FLA006",
   kind: "repo",
   run: ({ context }) => {
     const { config, rootDir, layerRanks, candidateFiles, fileContents } = context;
-    const rule = config.singleUseGlobal;
+    const rule = config.singleUseLayerModule;
     if (!rule?.enabled) {
       return [];
     }
@@ -19,16 +117,20 @@ export const RULE_FLA006 = {
       ? rule.minUpperModuleReferences
       : 2;
 
-    const globalModules = new Map();
+    const trackedModules = new Map();
     const incomingByTarget = new Map();
 
     for (const fileAbs of candidateFiles) {
       const sourceContent = fileContents.get(fileAbs) || "";
       const sourceInfo = getModuleInfo({ fileAbs, rootDir, config, layerRanks });
+      const sourceScopedKey = getScopedModuleKey({
+        info: sourceInfo,
+        layerDirs: config.layerDirs,
+      });
 
-      if (sourceInfo?.isGlobal && sourceInfo.moduleKey && applicableLayers.has(sourceInfo.layer)) {
-        if (!globalModules.has(sourceInfo.moduleKey)) {
-          globalModules.set(sourceInfo.moduleKey, sourceInfo);
+      if (sourceScopedKey && sourceInfo?.layer && applicableLayers.has(sourceInfo.layer)) {
+        if (!trackedModules.has(sourceScopedKey)) {
+          trackedModules.set(sourceScopedKey, sourceInfo);
         }
       }
 
@@ -41,7 +143,12 @@ export const RULE_FLA006 = {
       });
 
       for (const edge of edges) {
-        if (!edge.target.isGlobal || !edge.target.moduleKey) {
+        const targetScopedKey = getScopedModuleKey({
+          info: edge.target,
+          layerDirs: config.layerDirs,
+        });
+
+        if (!targetScopedKey) {
           continue;
         }
 
@@ -57,26 +164,56 @@ export const RULE_FLA006 = {
           continue;
         }
 
-        if (!edge.source.moduleKey) {
+        const sourceScopeKey = getConsumerScopeKey({
+          source: edge.source,
+          layerDirs: config.layerDirs,
+        });
+
+        if (!sourceScopeKey) {
           continue;
         }
 
-        const set = incomingByTarget.get(edge.target.moduleKey) || new Set();
-        set.add(edge.source.moduleKey);
-        incomingByTarget.set(edge.target.moduleKey, set);
+        const set = incomingByTarget.get(targetScopedKey) || new Set();
+        set.add(sourceScopeKey);
+        incomingByTarget.set(targetScopedKey, set);
       }
     }
 
     const violations = [];
 
-    for (const [moduleKey, info] of globalModules.entries()) {
-      const usageCount = incomingByTarget.get(moduleKey)?.size || 0;
+    for (const [scopedModuleKey, info] of trackedModules.entries()) {
+      const usageCount = incomingByTarget.get(scopedModuleKey)?.size || 0;
       if (usageCount === 0) {
         continue;
       }
 
       if (usageCount >= minRefs) {
         continue;
+      }
+
+      const upperScopes = [...(incomingByTarget.get(scopedModuleKey) || new Set())].sort();
+      if (
+        upperScopes.length === 1 &&
+        isNestedInScope({ moduleKey: scopedModuleKey, scopeKey: upperScopes[0] })
+      ) {
+        continue;
+      }
+
+      const upperSummary = upperScopes.map((item) => `"${item}"`).join(", ");
+      let placementHint = "Consider nesting it closer to its usage scope.";
+
+      if (upperScopes.length === 1) {
+        const onlyScope = upperScopes[0];
+
+        if (
+          hasScopedLayer({ scopeKey: onlyScope, layer: "_containers" }) &&
+          info.layer !== "_containers" &&
+          info.layer !== "_pages"
+        ) {
+          placementHint = `Consider placing it under that container module (for example: .../_containers/<module>/${info.layer}/... ).`;
+        } else if (hasScopedLayer({ scopeKey: onlyScope, layer: "_pages" })) {
+          placementHint = "Consider placing it under that page module.";
+        }
       }
 
       violations.push(
@@ -86,7 +223,7 @@ export const RULE_FLA006 = {
           rootDir,
           line: 1,
           column: 1,
-          message: `Global module '${moduleKey}' is referenced by only ${usageCount} upper-layer module(s). Consider nesting it closer to its usage scope.`,
+          message: `Layer module '${scopedModuleKey}' is referenced by only ${usageCount} upper scope(s): ${upperSummary}. ${placementHint}`,
         }),
       );
     }
