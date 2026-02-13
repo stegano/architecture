@@ -1,0 +1,88 @@
+# FLA Linter
+
+Custom linter for Fractal Layered Architecture (FLA) rules.
+
+## Run
+
+```bash
+node linter/cli.mjs
+```
+
+## Options
+
+- `--config <path>`: Use a custom config file.
+- `--format text|json`: Output format.
+- `--fail-on-warn`: Reserved flag for CI compatibility (same behavior as error-only mode).
+
+## Documentation principles covered
+
+- Unidirectional layer dependency (`_pages -> _containers -> _states -> _components -> _apis -> _utils`).
+- Layer directory naming with underscore prefix.
+- Kebab-case naming for files/directories.
+- Suffix-based file split (`.type`, `.schema`, `.stories`, `.test` + custom suffixes).
+- Avoid barrel files (`index.*`) in layer scope.
+- Nested layer placement under module directory.
+- Module grouping consistency per layer (directory-based or file-based).
+- Detect global modules that are referenced by only one upper module.
+
+## Rules
+
+- `FLA001 invalid-extension-or-suffix`
+  - Layer files only allow configured extensions (default: `.ts`, `.tsx`).
+  - Optional file suffixes must be in `defaultTsSuffixes + extraTsSuffixes`.
+
+- `FLA002 interface-outside-type-file`
+  - `interface` declarations are only allowed in files matched by `interfaceAllowedGlobs`.
+  - Default allowed glob: `**/*.type.ts`.
+
+- `FLA003 invalid-layer-reference`
+  - Enforces one-way dependency direction.
+  - Lower layers cannot reference higher layers.
+
+- `FLA004 barrel-index-forbidden`
+  - Forbids `index.*` files inside any layer path.
+
+- `FLA005 invalid-nested-layer-directory`
+  - Forbids direct layer-to-layer nesting (`.../_pages/_components/...`).
+  - Nested layer directories must be under a module directory first.
+
+- `FLA006 single-use-global-module`
+  - Detects global modules referenced by fewer upper modules than threshold.
+
+- `FLA007 kebab-case-naming`
+  - Enforces kebab-case naming for files and directories in layer scope.
+
+- `FLA008 layer-directory-naming`
+  - Enforces underscore-prefixed layer names (e.g. `_pages`, not `pages`).
+  - Flags unknown underscore-prefixed directory names in layer scope.
+
+- `FLA009 layer-module-grouping-consistency`
+  - A layer directory cannot mix module-directory style and module-file style.
+  - A module cannot exist as both file and directory in the same layer directory.
+
+## Config
+
+Default file: `linter/fla-lint.config.json`
+
+```json
+{
+  "layerDirs": ["_pages", "_containers", "_states", "_components", "_apis", "_utils"],
+  "ignoreDirs": [".git", "node_modules", "docs", "linter"],
+  "allowedExtensions": [".ts", ".tsx"],
+  "defaultTsSuffixes": ["type", "schema", "stories", "test"],
+  "extraTsSuffixes": [],
+  "interfaceAllowedGlobs": ["**/*.type.ts"],
+  "pathAliases": {},
+  "nestedLayer": { "enabled": true },
+  "singleUseGlobal": {
+    "enabled": true,
+    "layers": ["_states", "_components"],
+    "minUpperModuleReferences": 2
+  },
+  "namingConvention": { "enabled": true },
+  "layerDirectoryNaming": { "enabled": true },
+  "moduleGrouping": { "enabled": true }
+}
+```
+
+Use `extraTsSuffixes` to add project-specific suffixes (for example `hook`, `query`).

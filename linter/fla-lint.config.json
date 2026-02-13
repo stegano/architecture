@@ -1,0 +1,26 @@
+{
+  "layerDirs": ["_pages", "_containers", "_states", "_components", "_apis", "_utils"],
+  "ignoreDirs": [".git", "node_modules", "docs", "linter"],
+  "allowedExtensions": [".ts", ".tsx"],
+  "defaultTsSuffixes": ["type", "schema", "stories", "test"],
+  "extraTsSuffixes": [],
+  "interfaceAllowedGlobs": ["**/*.type.ts"],
+  "pathAliases": {},
+  "nestedLayer": {
+    "enabled": true
+  },
+  "singleUseGlobal": {
+    "enabled": true,
+    "layers": ["_states", "_components"],
+    "minUpperModuleReferences": 2
+  },
+  "namingConvention": {
+    "enabled": true
+  },
+  "layerDirectoryNaming": {
+    "enabled": true
+  },
+  "moduleGrouping": {
+    "enabled": true
+  }
+}
