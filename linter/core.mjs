@@ -47,8 +47,88 @@ const readJsonFile = (filePath) => {
   }
 };
 
-const extractPathAliasesFromTsConfigFile = (tsConfigPath) => {
-  const parsed = readJsonFile(tsConfigPath);
+const isDirectory = (value) => {
+  try {
+    return fs.statSync(value).isDirectory();
+  } catch {
+    return false;
+  }
+};
+
+const resolveProjectRoot = ({ startDir, markerFiles }) => {
+  const markers = markerFiles || [];
+  if (!startDir || typeof startDir !== "string") {
+    return {
+      rootDir: process.cwd(),
+      markerPath: null,
+      markerFile: null,
+    };
+  }
+
+  let currentDir = path.resolve(startDir);
+  let previousDir = null;
+
+  while (currentDir !== previousDir) {
+    for (const marker of markers) {
+      const markerPath = path.resolve(currentDir, marker);
+      if (readJsonFile(markerPath)) {
+        return {
+          rootDir: currentDir,
+          markerPath,
+          markerFile: marker,
+        };
+      }
+    }
+
+    previousDir = currentDir;
+    const parentDir = path.dirname(currentDir);
+    if (!isDirectory(parentDir) || parentDir === currentDir) {
+      break;
+    }
+    currentDir = parentDir;
+  }
+
+  return {
+    rootDir: path.resolve(startDir),
+    markerPath: null,
+    markerFile: null,
+  };
+};
+
+const resolveTsConfigExtendsPath = ({ extendsValue, fromFile }) => {
+  if (typeof extendsValue !== "string" || extendsValue.length === 0) {
+    return null;
+  }
+
+  const trimmed = extendsValue.trim();
+  if (
+    !trimmed.startsWith(".") &&
+    !trimmed.startsWith("/") &&
+    !trimmed.startsWith("..")
+  ) {
+    return null;
+  }
+
+  const baseDir = path.dirname(fromFile);
+  const candidates = [path.resolve(baseDir, trimmed)];
+  if (!candidates[0].endsWith(".json")) {
+    candidates.push(`${candidates[0]}.json`);
+  }
+
+  for (const candidate of candidates) {
+    try {
+      if (fs.statSync(candidate).isFile()) {
+        return candidate;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+};
+
+const extractPathAliasesFromParsedConfig = (parsed, tsConfigPath) => {
   if (!parsed || typeof parsed !== "object" || !parsed.compilerOptions) {
     return {};
   }
@@ -86,10 +166,48 @@ const extractPathAliasesFromTsConfigFile = (tsConfigPath) => {
   return aliases;
 };
 
+const collectPathAliasesFromTsConfig = (tsConfigPath, visited = new Set()) => {
+  const absPath = path.resolve(tsConfigPath);
+  if (visited.has(absPath)) {
+    return {};
+  }
+  visited.add(absPath);
+
+  const parsed = readJsonFile(absPath);
+  if (!parsed) {
+    return {};
+  }
+
+  let aliases = {};
+  const extendsValue = parsed.extends;
+  if (typeof extendsValue === "string" && extendsValue.length > 0) {
+    const parentConfig = resolveTsConfigExtendsPath({
+      extendsValue,
+      fromFile: absPath,
+    });
+    if (parentConfig) {
+      aliases = collectPathAliasesFromTsConfig(parentConfig, visited);
+    }
+  }
+
+  return {
+    ...aliases,
+    ...extractPathAliasesFromParsedConfig(parsed, absPath),
+  };
+};
+
+const extractPathAliasesFromTsConfigFile = (tsConfigPath) =>
+  collectPathAliasesFromTsConfig(tsConfigPath);
+
 const loadPathAliasesFromProjectConfig = (rootDir) => {
+  const { rootDir: projectRoot } = resolveProjectRoot({
+    startDir: rootDir,
+    markerFiles: ["tsconfig.json", "jsconfig.json"],
+  });
+
   const candidatePaths = [
-    path.resolve(rootDir, "tsconfig.json"),
-    path.resolve(rootDir, "jsconfig.json"),
+    path.resolve(projectRoot, "tsconfig.json"),
+    path.resolve(projectRoot, "jsconfig.json"),
   ];
 
   const aliases = {};
@@ -102,10 +220,15 @@ const loadPathAliasesFromProjectConfig = (rootDir) => {
 };
 
 export const loadConfig = ({ rootDir, configPath }) => {
+  const { rootDir: resolvedRootDir } = resolveProjectRoot({
+    startDir: rootDir,
+    markerFiles: ["linter/fla-lint.config.json", "tsconfig.json", "jsconfig.json"],
+  });
+
   const resolvedPath = configPath
     ? path.resolve(rootDir, configPath)
-    : path.resolve(rootDir, "linter/fla-lint.config.json");
-  const discoveredAliases = loadPathAliasesFromProjectConfig(rootDir);
+    : path.resolve(resolvedRootDir, "linter/fla-lint.config.json");
+  const discoveredAliases = loadPathAliasesFromProjectConfig(resolvedRootDir);
 
   if (!fs.existsSync(resolvedPath)) {
     const config = {

@@ -10,6 +10,11 @@ node linter/cli.mjs target/src
 node linter/cli.mjs <project-root>
 ```
 
+```bash
+node linter/cli.mjs --root .              # 루트 기준 실행
+node linter/cli.mjs src                   # 서브 디렉터리에서 실행해도 자동으로 프로젝트 루트 탐색
+```
+
 ## Options
 
 - `<project-root>`: optional positional root path for linted project (defaults to current working directory).
@@ -96,3 +101,47 @@ Default file: `linter/fla-lint.config.json`
 ```
 
 Use `extraTsSuffixes` to add project-specific suffixes (for example `hook`, `query`).
+
+## Alias resolution (important)
+
+`pathAliases` is resolved from:
+
+- `tsconfig.json` or `jsconfig.json` (`compilerOptions.paths`) in `extends` chain
+- then merged with the same setting from `linter/fla-lint.config.json`
+
+This allows `@/...` aliases to work in lint, even when running from a sub path such as `src`.
+
+`extends` merge rules (high priority to low):
+
+1. `linter/fla-lint.config.json` `pathAliases` (highest priority)
+2. current `tsconfig` (`compilerOptions.paths`) 
+3. ancestor `tsconfig` files via `extends` chain (lowest priority)
+
+Examples:
+
+Example:
+
+`tsconfig.json`
+
+```json
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
+  }
+}
+```
+
+Or define it directly:
+
+`linter/fla-lint.config.json`
+
+```json
+{
+  "pathAliases": {
+    "@/*": "src/*"
+  }
+}
+```
