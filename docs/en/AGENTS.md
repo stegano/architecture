@@ -2,7 +2,7 @@
 
 ## Overview
 
-Understand the architecture and write source code according to its principles. To efficiently utilize tokens, first refer to the `README.md` document, and then for detailed guidelines, refer to the documents in the `./docs/examples/en` path according to each task layer.
+Understand the architecture and write source code according to its principles. To efficiently utilize tokens, first refer to the `README.md` document, and then for detailed guidelines, refer to the documents in the `./docs/en/examples` path according to each task layer.
 
 ## Work Policy
 

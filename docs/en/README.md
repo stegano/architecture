@@ -25,7 +25,7 @@ graph LR
 
 ### Nested Layers
 
-Layers can have a nested layer structure, including themselves. Nested layer structures have strong dependencies and cohesion. This structure can prevent unused files from remaining when a layer is moved to another project or deleted.
+Layers can have a nested layer structure, where a layer can contain its own nested sub-layers. Nested layer structures have strong dependencies and cohesion. This structure can prevent unused files from remaining when a layer is moved to another project or deleted.
 
 ```bash
 └── _pages # (global)
