@@ -16,9 +16,9 @@ const ROUTER_MODULE_PATTERNS = [
   /^@remix-run\/router$/,
 ];
 
-const ROUTER_HOOK_IMPORT_RE = /\bimport\s+([\s\S]*?)\s+from\s*(['"])([^'"]+)\2/g;
-const DIRECT_HOOK_CALL_RE = /\b([A-Za-z_$][A-Za-z0-9_$]*)\s*\??\s*\(/g;
-const NAMESPACE_HOOK_CALL_RE = /\b([A-Za-z_$][A-Za-z0-9_$]*)\s*\.\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\??\s*\(/g;
+const ROUTER_HOOK_IMPORT_RE = /\bimport\s*([\s\S]*?)\s*from\s*(['"])([^'"]+)\2/g;
+const DIRECT_HOOK_CALL_RE = /\b([A-Za-z_$][A-Za-z0-9_$]*)\s*\(/g;
+const NAMESPACE_HOOK_CALL_RE = /\b([A-Za-z_$][A-Za-z0-9_$]*)\s*\??\s*\.\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\(/g;
 
 const isIdentifier = (value) => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(value);
 const isRouterModule = (specifier) =>
@@ -121,7 +121,7 @@ export const RULE_FLA010 = {
       return [];
     }
 
-  const { imports, namespaceAliases } = collectImportNames(content);
+    const { imports, namespaceAliases } = collectImportNames(content);
     if (imports.size === 0 && namespaceAliases.size === 0) {
       return [];
     }
@@ -138,7 +138,11 @@ export const RULE_FLA010 = {
           continue;
         }
 
-        const prev = hookCall.index > 0 ? masked[hookCall.index - 1] : "";
+        let prevIndex = hookCall.index - 1;
+        while (prevIndex >= 0 && /\s/.test(masked[prevIndex])) {
+          prevIndex--;
+        }
+        const prev = prevIndex >= 0 ? masked[prevIndex] : "";
         if (prev === ".") {
           continue;
         }
