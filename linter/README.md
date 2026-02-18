@@ -75,6 +75,10 @@ node linter/cli.mjs src                   # 서브 디렉터리에서 실행해�
   - A layer directory cannot mix module-directory style and module-file style.
   - A module cannot exist as both file and directory in the same layer directory.
 
+- `FLA010 page-only-router-hook`
+  - Router hooks imported from `react-router`/`next/navigation`-family modules (e.g. `useParams`) are restricted to `_pages` files.
+  - Non-page layers (`_containers`, `_states`, `_components`, `_apis`, `_utils`) should not call these hooks directly.
+
 ## Config
 
 Default file: `linter/fla-lint.config.json`
