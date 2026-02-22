@@ -1,6 +1,6 @@
 ---
 name: fla-component
-description: Guidance for component-layer responsibilities: prop-driven presentational UI with minimal external coupling.
+description: "Guidance for component-layer responsibilities: prop-driven presentational UI with minimal external coupling."
 ---
 
 <Purpose>

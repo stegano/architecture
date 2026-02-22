@@ -1,6 +1,6 @@
 ---
 name: fla-page
-description: Guidance for page-layer responsibilities: browser interaction, routing ownership, and top-level orchestration.
+description: Guidance for page-layer responsibilities including browser interaction, routing ownership, and top-level orchestration.
 ---
 
 <Purpose>

@@ -1,6 +1,6 @@
 ---
 name: fla-api
-description: Guidance for API-layer responsibilities: external communication boundaries and transport-level error handling.
+description: "Guidance for API-layer responsibilities: external communication boundaries and transport-level error handling."
 ---
 
 <Purpose>

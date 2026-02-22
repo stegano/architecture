@@ -1,6 +1,6 @@
 ---
 name: fla-container
-description: Guidance for container-layer responsibilities: composing UI modules and handling state-driven rendering decisions.
+description: "Guidance for container-layer responsibilities: composing UI modules and handling state-driven rendering decisions."
 ---
 
 <Purpose>

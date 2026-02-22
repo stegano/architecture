@@ -1,6 +1,6 @@
 ---
 name: fla-util
-description: Guidance for util-layer responsibilities: pure, reusable, domain-agnostic helper functions.
+description: Guidance for util-layer responsibilities including pure, reusable, domain-agnostic helper functions.
 ---
 
 <Purpose>

@@ -1,6 +1,6 @@
 ---
 name: fla-state
-description: Guidance for state-layer responsibilities: query/mutation orchestration, state logic, and business validation around data flow.
+description: Guidance for state-layer responsibilities including query and mutation orchestration, state logic, and business validation around data flow.
 ---
 
 <Purpose>
