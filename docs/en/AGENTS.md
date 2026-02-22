@@ -2,8 +2,24 @@
 
 ## Overview
 
-Understand the architecture and write source code according to its principles. To efficiently utilize tokens, first refer to the `README.md` document, and then for detailed guidelines, refer to the documents in the `./docs/en/examples` path according to each task layer.
+Use repository skills as the primary source of architecture rules.
+The `skills/` directory is self-contained and does not require `docs/` at runtime.
+
+## Skill-Based Activation
+
+- `skills/fla-architecture/SKILL.md` (always)
+- `skills/fla-file-directory-convention/SKILL.md` (path or module structure changes)
+- `skills/fla-layer-resolver/SKILL.md` (select effective layer by deepest path segment)
+
+Layer skills:
+- `/_pages/` -> `skills/fla-page/SKILL.md`
+- `/_containers/` -> `skills/fla-container/SKILL.md`
+- `/_states/` -> `skills/fla-state/SKILL.md`
+- `/_components/` -> `skills/fla-component/SKILL.md`
+- `/_apis/` -> `skills/fla-api/SKILL.md`
+- `/_utils/` -> `skills/fla-util/SKILL.md`
 
 ## Work Policy
 
-First, understand the style and flow of the existing source code of the file that needs modification, and minimize the scope of work if possible.
+First, understand existing style/flow in target files and minimize change scope.
+For edits outside layer directories, apply global and file-directory rules only.
