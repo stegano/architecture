@@ -22,29 +22,35 @@ Extract search keywords from the user’s query, quickly look up remote skills, 
    - Remote lookup must be executed only after approval.
    - If approval is denied, skip remote lookup and proceed with local guidance only (or report that remote lookup was not executed).
 4. Use `query.js` to pass the generated keywords together with `sessionId` and run parallel lookup.
-5. Create a `sessionId`, then read `.tmp/{sessionId}.tmp` and evaluate line by line.
-   - The output file is not JSON; it is a newline-delimited (`\n`) text file.
+5. Create a `sessionId`, then read `.tmp/{sessionId}/` and evaluate each generated skill directory.
+   - The output is a directory tree, not a newline text file.
+   - Structure:
+     ```bash
+     .tmp/{sessionId}/
+       {data.name}/
+         SKILL.md
+         ... (additional files/directories from data.files or data.dir)
+     ```
    - `sessionId` **identifies a single lookup execution**.
-   - **Reuse the same sessionId** across lookup/evaluation/deletion steps (procedure 3~5).
+   - **Reuse the same sessionId** across lookup/evaluation/deletion steps (procedure 3~6).
    - Recommended format: `rskill-YYYYMMDD-HHMMSS-topic`
      - Example: `rskill-20260222-195500-fla`
    - Recommended allowed characters: letters/numbers/`-`/`_`/`.`
      - The script replaces unsupported characters with `_`.
    - If `-s` is omitted, it is saved with the default value `unknown`. (Not recommended)
    - Generate `sessionId` based on `$(date +%Y%m%d-%H%M%S)`.
-   - Purpose: To save context, first preview 500 characters per line to shortlist name/description candidates, then read only candidate lines in full.
+   - Purpose: To save context, first read each `SKILL.md` frontmatter to shortlist candidates, then read full content only for selected skills.
      ```bash
-     i=1
-     while true; do
-      line=$(sed -n "${i}p" ".tmp/${sessionId}.tmp")
-       [ -z "$line" ] && break
-       echo "$line" | cut -c 1-500
-       i=$((i + 1))
+     tmpDir=".tmp/${sessionId}"
+     for file in "$tmpDir"/*/SKILL.md; do
+       [ -f "$file" ] || continue
+       echo "=== $file ==="
+       awk 'NR==1 && $0!="---"{exit} {print} /^---$/ && ++m==2 {exit}' "$file" | cut -c 1-500
      done
      ```
-   - Read full candidate line: `sed -n "${i}p" ".tmp/${sessionId}.tmp"`
+   - Read full candidate file: `sed -n '1,200p' "$tmpDir/{data.name}/SKILL.md"`
 
-6. After usage determination is complete, delete `.tmp/${sessionId}.tmp`.
+6. After usage determination is complete, delete `.tmp/${sessionId}` and all generated skill files.
 7. Expose the name of the guidance used to the user, and summarize the guidance-based reasoning.
 
 ### Search Keyword Generation Checklist (Must Apply)
@@ -72,11 +78,15 @@ sessionId="rskill-$(date +%Y%m%d-%H%M%S)-fla"
 node .agents/skills/remote-skill/scripts/cli/query.js "query1" "query2" -s "$sessionId"
 ```
 
-Then read and delete the file using the same `sessionId`:
+Then read and delete the directory using the same `sessionId`:
 
 ```bash
-sed -n '1p' ".tmp/${sessionId}.tmp" | cut -c 1-500
-rm -f ".tmp/${sessionId}.tmp"
+tmpDir=".tmp/${sessionId}"
+for file in "$tmpDir"/*/SKILL.md; do
+  [ -f "$file" ] || continue
+  awk 'NR==1 && $0!="---"{exit} {print} /^---$/ && ++m==2 {exit}' "$file" | cut -c 1-500
+done
+rm -rf "$tmpDir"
 ```
 
 ## Usage Example

@@ -12,8 +12,48 @@ const SKILLS_API = `https://api.searchify.fuzziee.com/search/fe8a06cc634f0a74824
 const TIMEOUT_MS = 10000,
   SESSION = "unknown";
 const s = (v) => (typeof v === "string" ? v.trim() : "");
+const o = (v) => Boolean(v) && typeof v === "object" && !Array.isArray(v);
 const ok = (j, c) =>
   c >= 200 && c < 300 && s(j?.status).toLowerCase() === "success";
+const sid = (v) => {
+  const n = s(v).replace(/[^a-zA-Z0-9._-]/g, "_");
+  if (!n || n === "." || n === "..") return "";
+  return n;
+};
+const dname = (v) => {
+  const n = s(v);
+  if (/[\\/]/.test(n)) return "";
+  if (!n || n === "." || n === "..") return "";
+  return n;
+};
+const rel = (p) => {
+  const n = path.posix.normalize(s(p).replace(/\\/g, "/").replace(/^\/+/, ""));
+  if (!n || n === "." || n.startsWith("..") || path.posix.isAbsolute(n))
+    return "";
+  return n;
+};
+const content = (v) =>
+  typeof v === "string"
+    ? v
+    : o(v) && typeof v.content === "string"
+      ? v.content
+      : "";
+const merge = (to, from) => {
+  if (!o(from)) return to;
+  for (const [k, v] of Object.entries(from)) {
+    const c = content(v);
+    if (c) to[s(k)] = c;
+  }
+  return to;
+};
+const filesOf = (d) => {
+  const files = {};
+  merge(files, d?.files);
+  merge(files, d?.dir);
+  return files;
+};
+const skillOf = (files) =>
+  content(files["/SKILL.md"]) || content(files["SKILL.md"]);
 
 const req = (url, m = "GET", body = null) =>
   new Promise((resv) => {
@@ -87,40 +127,81 @@ const fetchData = async (query) => {
       },
     };
   const list = (d.json?.data?.itemList || [])
-    .map((x) => ({
-      id: Number(x?.id) || 0,
-      data: { ...x?.data, skill: s(x?.data?.skill), detailToken: token },
-    }))
-    .filter((x) => x.data?.skill);
+    .map((x) => {
+      const files = filesOf(x?.data);
+      const skill = skillOf(files);
+      const name = s(x?.data?.name);
+      return {
+        id: Number(x?.id) || 0,
+        data: {
+          ...x?.data,
+          name,
+          files,
+          skill,
+          detailToken: token,
+        },
+      };
+    })
+    .filter((x) => x.data?.name && x.data?.skill);
   return { status: "Success", data: { query: q, itemList: list } };
 };
 
 const cli = async (qs, sessionId) => {
   const queries = (qs || []).map(s).filter(Boolean);
-  const sid = s(sessionId) || SESSION;
-  const out = path.resolve(
-    process.cwd(),
-    ".tmp",
-    `${sid.replace(/[^a-zA-Z0-9._-]/g, "_")}.tmp`,
-  );
-  await fs.promises.mkdir(path.dirname(out), { recursive: true });
+  const session = sid(sessionId) || SESSION;
+  const out = path.resolve(process.cwd(), ".tmp", session);
+  const old = path.resolve(process.cwd(), ".tmp", `${session}.tmp`);
+  await fs.promises.rm(old, { force: true });
+  await fs.promises.rm(out, { recursive: true, force: true });
+  await fs.promises.mkdir(out, { recursive: true });
   if (!queries.length) {
-    await fs.promises.writeFile(out, "", "utf8");
-    return { status: "Success", queryCount: 0, itemCount: 0, outputFile: out };
+    return {
+      status: "Success",
+      queryCount: 0,
+      itemCount: 0,
+      outputFile: out,
+      outputDir: out,
+    };
   }
   const responses = await Promise.all(queries.map(fetchData));
-  const skills = responses
-    .flatMap((r) =>
-      (r.data?.itemList || []).map((x) => x?.data?.skill).filter(Boolean),
-    )
-    .map((x) => x.replace(/\r?\n/g, "\\n"));
-  await fs.promises.writeFile(out, skills.join("\n"), "utf8");
+  const items = responses.flatMap((r) => r.data?.itemList || []);
+  const used = new Set();
+  const created = [];
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i] || {};
+    const files = filesOf(item?.data);
+    const skill = skillOf(files);
+    if (!skill) continue;
+    const dir = dname(item?.data?.name);
+    if (!dir || used.has(dir)) continue;
+    used.add(dir);
+    const root = path.join(out, dir);
+    await fs.promises.mkdir(root, { recursive: true });
+    let fileCount = 0;
+    for (const [p, v] of Object.entries(files)) {
+      const r = rel(p);
+      const c = content(v);
+      if (!r || !c) continue;
+      const filePath = path.join(root, r);
+      await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+      await fs.promises.writeFile(filePath, c, "utf8");
+      fileCount += 1;
+    }
+    if (!fileCount) continue;
+    created.push({
+      id: item?.id || 0,
+      name: s(item?.data?.name),
+      directory: dir,
+      fileCount,
+    });
+  }
   return {
     status: "Success",
     queryCount: queries.length,
-    itemCount: skills.length,
+    itemCount: created.length,
     outputFile: out,
-    data: { responses },
+    outputDir: out,
+    data: { responses, itemList: created },
   };
 };
 
