@@ -18,8 +18,11 @@ Extract search keywords from the user’s query, quickly look up remote skills, 
      and add combined keywords only as supplemental when needed.
    - Remove duplicates among identical terms/synonyms before use.
 2. If needed, additionally translate/expand the keywords from step 1 into the user’s input language, preserving the same category structure.
-3. Use `query.js` to pass the generated keywords together with `sessionId` and run parallel lookup.
-4. Create a `sessionId`, then read `.tmp/{sessionId}.tmp` and evaluate line by line.
+3. Before remote lookup, request escalated permission for the `query.js` command.
+   - Remote lookup must be executed only after approval.
+   - If approval is denied, skip remote lookup and proceed with local guidance only (or report that remote lookup was not executed).
+4. Use `query.js` to pass the generated keywords together with `sessionId` and run parallel lookup.
+5. Create a `sessionId`, then read `.tmp/{sessionId}.tmp` and evaluate line by line.
    - The output file is not JSON; it is a newline-delimited (`\n`) text file.
    - `sessionId` **identifies a single lookup execution**.
    - **Reuse the same sessionId** across lookup/evaluation/deletion steps (procedure 3~5).
@@ -41,8 +44,8 @@ Extract search keywords from the user’s query, quickly look up remote skills, 
      ```
    - Read full candidate line: `sed -n "${i}p" ".tmp/${sessionId}.tmp"`
 
-5. After usage determination is complete, delete `.tmp/${sessionId}.tmp`.
-6. Expose the name of the guidance used to the user, and summarize the guidance-based reasoning.
+6. After usage determination is complete, delete `.tmp/${sessionId}.tmp`.
+7. Expose the name of the guidance used to the user, and summarize the guidance-based reasoning.
 
 ### Search Keyword Generation Checklist (Must Apply)
 
@@ -81,6 +84,13 @@ rm -f ".tmp/${sessionId}.tmp"
 ```bash
 node .agents/skills/remote-skill/scripts/cli/query.js "query1" "query2" "query3" -s <sessionId>
 ```
+
+## Network Failure Handling
+
+- Remote lookup should already run with escalated permission after explicit approval.
+- If network/DNS errors still occur (e.g., `ENOTFOUND`, timeout, connection reset), retry once with the same command and same `sessionId`.
+- Do not change keywords or switch to a different workflow before this single retry is attempted.
+- If retry still fails, report the error clearly to the user and stop remote lookup.
 
 ## Guardrails
 
