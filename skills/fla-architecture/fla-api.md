@@ -8,9 +8,10 @@ Define `_apis` as the sole boundary for external systems and transport-level con
 </Purpose>
 
 <Use_When>
+
 - Effective layer resolved to `_apis`.
 - Task focuses on external I/O such as HTTP requests, storage, cookies, or transport mapping.
-</Use_When>
+  </Use_When>
 
 <Layer_Intent>
 API layer handles communication with external systems (server, localStorage, cookies, and related transport concerns).
@@ -24,6 +25,7 @@ API layer handles communication with external systems (server, localStorage, coo
 
 <Conceptual_Examples>
 Server request with status-based handling:
+
 ```ts
 // File: _pages/user/_apis/user/user.tsx
 export const fetchUser = async (...) => {
@@ -40,6 +42,7 @@ export const fetchUser = async (...) => {
 ```
 
 Browser localStorage access:
+
 ```ts
 // File: _pages/user/_apis/user/user.ts
 export const fetchUserSetting = async (...) => {
@@ -51,4 +54,5 @@ export const fetchUserSetting = async (...) => {
   }
 };
 ```
+
 </Conceptual_Examples>
