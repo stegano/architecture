@@ -12,6 +12,7 @@ The `skills/` directory is self-contained and does not require `docs/` at runtim
 - `skills/fla-layer-resolver/SKILL.md` (select effective layer by deepest path segment)
 
 Layer skills:
+
 - `/_pages/` -> `skills/fla-page/SKILL.md`
 - `/_containers/` -> `skills/fla-container/SKILL.md`
 - `/_states/` -> `skills/fla-state/SKILL.md`
